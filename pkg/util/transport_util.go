@@ -20,13 +20,14 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
-	"net/http"
+	"github.com/sirupsen/logrus"
 
 	"github.com/GoogleContainerTools/kaniko/pkg/config"
-	"github.com/sirupsen/logrus"
 )
 
 type CertPool interface {
@@ -79,6 +80,23 @@ func init() {
 	systemKeyPairLoader = &X509KeyPairLoader{}
 }
 
+type dragonflyRT struct {
+	rt http.RoundTripper
+}
+
+func (d *dragonflyRT) RoundTrip(req *http.Request) (*http.Response, error) {
+	v := os.Getenv("DRAGONFLY_ENDPOINT")
+	if v != "" && req.URL.Scheme == "https" {
+		u, err := url.Parse(v)
+		if err == nil {
+			req.URL.Scheme = u.Scheme
+			req.URL.Host = u.Host
+			req.Header.Set("X-Dragonfly-Registry", fmt.Sprintf("%s://%s", u.Scheme, u.Host))
+		}
+	}
+	return d.rt.RoundTrip(req)
+}
+
 func MakeTransport(opts config.RegistryOptions, registryName string) (http.RoundTripper, error) {
 	// Create a transport to set our user-agent.
 	var tr http.RoundTripper = http.DefaultTransport.(*http.Transport).Clone()
@@ -107,5 +125,7 @@ func MakeTransport(opts config.RegistryOptions, registryName string) (http.Round
 		tr.(*http.Transport).TLSClientConfig.Certificates = []tls.Certificate{cert}
 	}
 
-	return tr, nil
+	tr.(*http.Transport).Proxy = nil
+
+	return &dragonflyRT{tr}, nil
 }
