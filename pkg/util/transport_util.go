@@ -89,11 +89,12 @@ func (d *dragonflyRT) RoundTrip(req *http.Request) (*http.Response, error) {
 	if v != "" && req.URL.Scheme == "https" {
 		u, err := url.Parse(v)
 		if err == nil {
+			req.Header.Set("X-Dragonfly-Registry", fmt.Sprintf("%s://%s", req.URL.Scheme, req.URL.Host))
 			req.URL.Scheme = u.Scheme
 			req.URL.Host = u.Host
-			req.Header.Set("X-Dragonfly-Registry", fmt.Sprintf("%s://%s", u.Scheme, u.Host))
 		}
 	}
+	logrus.Debugf("RoundTrip: %s, %s", req.URL.String(), req.Host)
 	return d.rt.RoundTrip(req)
 }
 
